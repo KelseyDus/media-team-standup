@@ -68,15 +68,6 @@ const BADGES = [
   { label: "Clutch Player",  emoji: "🎯", desc: "Closed something critical last minute" },
 ];
 
-const LEARN_CATEGORIES = [
-  { id: "news",  label: "Industry News",  emoji: "📰", color: "#4ECDC4" },
-  { id: "tip",   label: "Quick Tip",      emoji: "💡", color: "#FFE66D" },
-  { id: "trend", label: "Trending Now",   emoji: "📈", color: "#C3A6FF" },
-  { id: "tool",  label: "Tool Spotlight", emoji: "🛠️", color: "#FF6B6B" },
-  { id: "case",  label: "Case Study",     emoji: "🔬", color: "#A8E6CF" },
-];
-
-const QUICK_TOPICS = ["GA4 tips","Meta Ads performance","Google Ads Quality Score","Email open rates","SEO in 2026","AI in ad copy","Local SEO","CRO basics"];
 
 const SEED = {
   goals: [
@@ -210,141 +201,6 @@ function BlockerCard({ blocker, onResolve }) {
   );
 }
 
-// ─── LEARN TAB ────────────────────────────────────────────────────────────────
-function LearnTab() {
-  const [cat, setCat] = useState(LEARN_CATEGORIES[0]);
-  const [content, setContent] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [quizAnswer, setQuizAnswer] = useState(null);
-  const [quizResult, setQuizResult] = useState(null);
-  const [custom, setCustom] = useState("");
-  const [showCustom, setShowCustom] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const hasKey = !!localStorage.getItem("anthropic_key");
-  const [saved, setSaved] = useLS("standup_saved_learn", []);
-
-  const PROMPTS = {
-    news: `You are a digital marketing expert briefing a boutique marketing agency. Share ONE compelling piece of current digital marketing news or platform change. JSON only, no markdown:\n{"headline":"...","emoji":"...","summary":"2-3 sentences","why_it_matters":"1 sentence","source_label":"e.g. Google/Meta/HubSpot","quiz_question":"multiple choice question","quiz_options":["A. ...","B. ...","C. ...","D. ..."],"quiz_answer":"A"}`,
-    tip:  `You are a digital marketing expert. Give ONE actionable quick tip an agency team can use TODAY. Topics: PPC, SEO, social, email, GA4, Meta Ads, Google Ads, content, CRO. JSON only:\n{"title":"...","emoji":"...","tip":"2-3 sentences","how_to_apply":"1 sentence","difficulty":"Easy|Medium|Advanced","time_to_implement":"e.g. 15 min","quiz_question":"...","quiz_options":["A. ...","B. ...","C. ...","D. ..."],"quiz_answer":"B"}`,
-    trend:`You are a digital marketing strategist. Share ONE significant trend in digital marketing right now. JSON only:\n{"trend":"...","emoji":"...","summary":"2-3 sentences","opportunity":"1 sentence","urgency":"High|Medium|Low","quiz_question":"...","quiz_options":["A. ...","B. ...","C. ...","D. ..."],"quiz_answer":"C"}`,
-    tool: `You are a digital marketing tools expert. Spotlight ONE useful tool for a boutique agency. JSON only:\n{"tool_name":"...","emoji":"...","category":"...","summary":"2-3 sentences","best_for":"...","free_or_paid":"Free|Freemium|Paid","quiz_question":"...","quiz_options":["A. ...","B. ...","C. ...","D. ..."],"quiz_answer":"A"}`,
-    case: `You are a digital marketing strategist. Share a brief case study applicable to small/mid-market businesses. JSON only:\n{"brand":"...","emoji":"...","industry":"...","strategy":"1 sentence","result":"1-2 sentences","key_takeaway":"1 sentence","quiz_question":"...","quiz_options":["A. ...","B. ...","C. ...","D. ..."],"quiz_answer":"B"}`,
-  };
-
-  const fetchContent = async (catId, topic=null) => {
-    const key = localStorage.getItem("anthropic_key") || "";
-    if (!key) { setError("No Anthropic API key set. Click the ⚙ Settings button above to add your key."); return; }
-    setLoading(true); setContent(null); setError(null); setQuizAnswer(null); setQuizResult(null);
-    const prompt = topic
-      ? `You are a digital marketing expert. Topic: "${topic}". Brief educational summary for an agency standup. JSON only:\n{"title":"...","emoji":"...","summary":"3-4 sentences","key_points":["...","...","..."],"action_item":"1 concrete thing to do today","quiz_question":"...","quiz_options":["A. ...","B. ...","C. ...","D. ..."],"quiz_answer":"A"}`
-      : PROMPTS[catId];
-    try {
-      const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://api.anthropic.com/v1/messages");
-      const res = await fetch(proxyUrl, {
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "x-api-key": key,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true"
-        },
-        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1000, system:"Respond with valid JSON only. No markdown fences, no preamble.", messages:[{role:"user",content:prompt}] })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || `API error ${res.status}`);
-      const text = data.content?.find(b=>b.type==="text")?.text || "{}";
-      setContent({ ...JSON.parse(text.replace(/```json|```/g,"").trim()), _id: topic?"custom":catId });
-    } catch(e) { setError(e.message); }
-    setLoading(false);
-  };
-
-  const Hl = ({color,label,children}) => (
-    <div style={{ background:color+"11", border:`1px solid ${color}33`, borderRadius:10, padding:"10px 14px", marginBottom:12 }}>
-      <div style={{ fontSize:10, color, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase", marginBottom:4 }}>{label}</div>
-      <div style={{ fontSize:13, color:"rgba(255,255,255,0.85)", lineHeight:1.6 }}>{children}</div>
-    </div>
-  );
-
-  const renderContent = () => {
-    if (!content) return null;
-    const id = content._id;
-    return (
-      <div style={{ animation:"fadeIn 0.4s ease" }}>
-        <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:14, padding:24, marginBottom:16 }}>
-          <div style={{ fontSize:40, marginBottom:12 }}>{content.emoji}</div>
-          {id==="news" && <><div style={{ fontSize:20, fontWeight:800, marginBottom:10, lineHeight:1.3 }}>{content.headline}</div><div style={{ fontSize:14, color:"rgba(255,255,255,0.75)", lineHeight:1.65, marginBottom:14 }}>{content.summary}</div><Hl color="#4ECDC4" label="Why It Matters">{content.why_it_matters}</Hl><div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>Source: {content.source_label}</div></>}
-          {id==="tip"  && <><div style={{ fontSize:20, fontWeight:800, marginBottom:10 }}>{content.title}</div><div style={{ fontSize:14, color:"rgba(255,255,255,0.75)", lineHeight:1.65, marginBottom:14 }}>{content.tip}</div><Hl color="#FFE66D" label="Apply It Now">{content.how_to_apply}</Hl><span style={{ background:"rgba(255,255,255,0.08)", borderRadius:20, padding:"3px 12px", fontSize:12, marginRight:8 }}>⚡ {content.difficulty}</span><span style={{ background:"rgba(255,255,255,0.08)", borderRadius:20, padding:"3px 12px", fontSize:12 }}>⏱ {content.time_to_implement}</span></>}
-          {id==="trend"&& <><div style={{ fontSize:20, fontWeight:800, marginBottom:10 }}>{content.trend}</div><div style={{ fontSize:14, color:"rgba(255,255,255,0.75)", lineHeight:1.65, marginBottom:14 }}>{content.summary}</div><Hl color="#C3A6FF" label="Opportunity">{content.opportunity}</Hl><span style={{ background:content.urgency==="High"?"rgba(255,107,107,0.15)":"rgba(255,255,255,0.08)", color:content.urgency==="High"?"#FF6B6B":"rgba(255,255,255,0.6)", borderRadius:20, padding:"3px 12px", fontSize:12, fontWeight:600 }}>🔥 {content.urgency} Urgency</span></>}
-          {id==="tool" && <><div style={{ fontSize:20, fontWeight:800, marginBottom:3 }}>{content.tool_name}</div><div style={{ fontSize:12, color:"#FF6B6B", marginBottom:12, fontWeight:600 }}>{content.category}</div><div style={{ fontSize:14, color:"rgba(255,255,255,0.75)", lineHeight:1.65, marginBottom:14 }}>{content.summary}</div><span style={{ background:"rgba(255,255,255,0.08)", borderRadius:20, padding:"3px 12px", fontSize:12, marginRight:8 }}>🎯 {content.best_for}</span><span style={{ background:"rgba(255,255,255,0.08)", borderRadius:20, padding:"3px 12px", fontSize:12 }}>💰 {content.free_or_paid}</span></>}
-          {id==="case" && <><div style={{ fontSize:20, fontWeight:800, marginBottom:3 }}>{content.brand}</div><div style={{ fontSize:12, color:"#A8E6CF", marginBottom:12, fontWeight:600 }}>{content.industry}</div><div style={{ marginBottom:10 }}><div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:1.5, marginBottom:3 }}>Strategy</div><div style={{ fontSize:14, color:"rgba(255,255,255,0.8)" }}>{content.strategy}</div></div><div style={{ marginBottom:14 }}><div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:1.5, marginBottom:3 }}>Result</div><div style={{ fontSize:14, color:"rgba(255,255,255,0.8)" }}>{content.result}</div></div><Hl color="#A8E6CF" label="Key Takeaway">{content.key_takeaway}</Hl></>}
-          {id==="custom"&&<><div style={{ fontSize:20, fontWeight:800, marginBottom:10 }}>{content.title}</div><div style={{ fontSize:14, color:"rgba(255,255,255,0.75)", lineHeight:1.65, marginBottom:14 }}>{content.summary}</div>{Array.isArray(content.key_points)&&content.key_points.map((p,i)=><div key={i} style={{ display:"flex", gap:8, marginBottom:7 }}><span style={{ color:"#4ECDC4", fontWeight:700 }}>→</span><span style={{ fontSize:13, color:"rgba(255,255,255,0.8)" }}>{p}</span></div>)}{content.action_item&&<Hl color="#4ECDC4" label="Action Item">{content.action_item}</Hl>}</>}
-          <div style={{ display:"flex", gap:8, marginTop:18 }}>
-            <button onClick={()=>{ if(!content) return; setSaved(p=>[{id:Date.now(),date:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}),cat:cat.label,emoji:content.emoji||"📌",title:content.headline||content.title||content.trend||content.tool_name||content.brand||"Saved"},...p.slice(0,9)]); }} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"rgba(255,255,255,0.6)", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontFamily:"inherit", fontSize:12 }}>📌 Save</button>
-            <button onClick={()=>fetchContent(cat.id)} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"rgba(255,255,255,0.6)", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontFamily:"inherit", fontSize:12 }}>🔄 Refresh</button>
-          </div>
-        </div>
-        {content.quiz_question && (
-          <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:14, padding:20 }}>
-            <div style={{ fontSize:10, fontWeight:700, letterSpacing:2, textTransform:"uppercase", color:"rgba(255,255,255,0.35)", marginBottom:12 }}>🧠 KNOWLEDGE CHECK — +{POINT_VALUES.quizCorrect} PTS</div>
-            <div style={{ fontSize:15, fontWeight:600, marginBottom:14, lineHeight:1.4 }}>{content.quiz_question}</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {(content.quiz_options||[]).map((opt,i)=>{ const sel=quizAnswer===opt, cor=opt.startsWith(content.quiz_answer); let bg="rgba(255,255,255,0.05)",bdr="1px solid rgba(255,255,255,0.1)",col="rgba(255,255,255,0.75)"; if(quizAnswer){ if(cor){bg="rgba(78,205,196,0.15)";bdr="1px solid #4ECDC4";col="#4ECDC4";} else if(sel){bg="rgba(255,107,107,0.15)";bdr="1px solid #FF6B6B";col="#FF6B6B";} } return <button key={i} onClick={()=>{ if(quizAnswer) return; setQuizAnswer(opt); setQuizResult(opt.startsWith(content.quiz_answer)); }} style={{ background:bg, border:bdr, borderRadius:10, padding:"10px 16px", color:col, fontSize:13, cursor:quizAnswer?"default":"pointer", fontFamily:"inherit", textAlign:"left" }}>{opt}</button>; })}
-            </div>
-            {quizResult!==null && <div style={{ marginTop:12, padding:"10px 14px", background:quizResult?"rgba(78,205,196,0.1)":"rgba(255,107,107,0.1)", borderRadius:10, fontSize:14, fontWeight:600, color:quizResult?"#4ECDC4":"#FF6B6B", animation:"fadeIn 0.3s ease" }}>{quizResult?"🎉 Correct! +20 points!":"❌ Not quite — correct answer highlighted above."}</div>}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div style={{ padding:28, display:"grid", gridTemplateColumns:"1fr 300px", gap:24, alignItems:"start" }}>
-      <div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-          <div style={{ fontSize:22, fontWeight:800 }}>📡 Learn & Stay Current</div>
-          <button onClick={()=>{ setShowSettings(s=>!s); setApiKeyInput(localStorage.getItem("anthropic_key")||""); }} style={{ background:hasKey?"rgba(78,205,196,0.1)":"rgba(255,107,107,0.1)", border:`1px solid ${hasKey?"#4ECDC4":"#FF6B6B"}`, color:hasKey?"#4ECDC4":"#FF6B6B", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontSize:12, fontFamily:"inherit", fontWeight:600 }}>{hasKey?"⚙ API Key Set":"⚙ Add API Key"}</button>
-        </div>
-        <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)", marginBottom:showSettings?12:20 }}>AI-powered digital marketing insights, refreshed on demand.</div>
-        {showSettings && (
-          <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:12, padding:18, marginBottom:20 }}>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", marginBottom:10 }}>Paste your Anthropic API key below. It saves to this browser only — never touches GitHub.<br/><span style={{ color:"rgba(255,255,255,0.3)" }}>Get it at: console.anthropic.com/settings/api-keys</span></div>
-            <div style={{ display:"flex", gap:8 }}>
-              <input style={{ flex:1, background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:8, padding:"8px 12px", color:"#fff", fontSize:13, fontFamily:"inherit", outline:"none" }} type="password" placeholder="sk-ant-..." value={apiKeyInput} onChange={e=>setApiKeyInput(e.target.value)}/>
-              <button onClick={()=>{ if(apiKeyInput.trim()){ localStorage.setItem("anthropic_key", apiKeyInput.trim()); setShowSettings(false); setError(null); } }} style={{ background:"linear-gradient(135deg,#3f5efb,#fc466b)", border:"none", color:"#fff", borderRadius:8, padding:"8px 18px", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:13 }}>Save</button>
-              {hasKey && <button onClick={()=>{ localStorage.removeItem("anthropic_key"); setApiKeyInput(""); setShowSettings(false); }} style={{ background:"rgba(255,107,107,0.15)", border:"1px solid rgba(255,107,107,0.3)", color:"#FF6B6B", borderRadius:8, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontSize:13 }}>Remove</button>}
-            </div>
-          </div>
-        )}
-        <div style={{ display:"flex", gap:8, marginBottom:18, flexWrap:"wrap" }}>
-          {LEARN_CATEGORIES.map(c=><button key={c.id} onClick={()=>{setCat(c);setContent(null);setError(null);setQuizAnswer(null);setQuizResult(null);}} style={{ background:cat.id===c.id?c.color+"22":"rgba(255,255,255,0.05)", border:`1px solid ${cat.id===c.id?c.color:"rgba(255,255,255,0.1)"}`, color:cat.id===c.id?c.color:"rgba(255,255,255,0.5)", borderRadius:24, padding:"7px 16px", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600 }}>{c.emoji} {c.label}</button>)}
-        </div>
-        <div style={{ marginBottom:18 }}>
-          {showCustom
-            ? <div style={{ display:"flex", gap:8 }}><input style={{ flex:1, background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:8, padding:"9px 14px", color:"#fff", fontSize:13, fontFamily:"inherit", outline:"none" }} placeholder="e.g. 'GA4 attribution' or 'Meta Advantage+ campaigns'..." value={custom} onChange={e=>setCustom(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&custom.trim()){fetchContent(null,custom);setShowCustom(false);}}}/><button onClick={()=>{if(custom.trim()){fetchContent(null,custom);setShowCustom(false);}}} style={C.saveBtn}>Ask</button><button onClick={()=>setShowCustom(false)} style={C.cancelBtn}>✕</button></div>
-            : <button onClick={()=>setShowCustom(true)} style={{ background:"rgba(255,255,255,0.05)", border:"1px dashed rgba(255,255,255,0.2)", color:"rgba(255,255,255,0.45)", borderRadius:8, padding:"8px 18px", cursor:"pointer", fontFamily:"inherit", fontSize:13 }}>🔍 Ask about a specific topic...</button>}
-        </div>
-        {!content&&!loading&&!error&&<button onClick={()=>fetchContent(cat.id)} style={{ background:"linear-gradient(135deg,#3f5efb,#fc466b)", border:"none", color:"#fff", borderRadius:12, padding:"14px 28px", cursor:"pointer", fontFamily:"inherit", fontWeight:800, fontSize:16, boxShadow:"0 4px 20px rgba(63,94,251,0.3)" }}>{cat.emoji} Load Today's {cat.label}</button>}
-        {loading&&<div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:14, padding:40, textAlign:"center" }}><div style={{ fontSize:36, marginBottom:12, animation:"pulse 1.2s infinite" }}>⚡</div><div style={{ fontSize:14, color:"rgba(255,255,255,0.5)" }}>Pulling the latest insights...</div></div>}
-        {error&&<div style={{ background:"rgba(255,107,107,0.08)", border:"1px solid rgba(255,107,107,0.3)", borderRadius:12, padding:20 }}><div style={{ fontSize:14, color:"#FF6B6B", marginBottom:6 }}>⚠️ {error}</div><div style={{ fontSize:12, color:"rgba(255,255,255,0.4)" }}>Add your Anthropic API key to the CONFIG section at the top of index.html.</div></div>}
-        {renderContent()}
-      </div>
-      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-        <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:14, padding:18 }}>
-          <div style={{ fontSize:10, fontWeight:700, letterSpacing:2, textTransform:"uppercase", color:"rgba(255,255,255,0.35)", marginBottom:14 }}>📌 SAVED FOR LATER</div>
-          {saved.length===0&&<div style={{ fontSize:13, color:"rgba(255,255,255,0.25)", textAlign:"center", padding:"16px 0" }}>Nothing saved yet.</div>}
-          {saved.map(item=><div key={item.id} style={{ padding:"9px 0", borderBottom:"1px solid rgba(255,255,255,0.05)" }}><div style={{ display:"flex", gap:8, alignItems:"flex-start" }}><span style={{ fontSize:18, flexShrink:0 }}>{item.emoji}</span><div style={{ flex:1, minWidth:0 }}><div style={{ fontSize:13, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.title}</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{item.cat} · {item.date}</div></div><button onClick={()=>setSaved(p=>p.filter(x=>x.id!==item.id))} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.2)", cursor:"pointer", fontSize:14 }}>×</button></div></div>)}
-        </div>
-        <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:14, padding:18 }}>
-          <div style={{ fontSize:10, fontWeight:700, letterSpacing:2, textTransform:"uppercase", color:"rgba(255,255,255,0.35)", marginBottom:12 }}>⚡ QUICK TOPICS</div>
-          {QUICK_TOPICS.map(t=><button key={t} onClick={()=>{setShowCustom(false);fetchContent(null,t);}} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.55)", borderRadius:20, padding:"5px 12px", cursor:"pointer", fontFamily:"inherit", fontSize:11, margin:"0 5px 6px 0", display:"inline-block" }}>{t}</button>)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
   const [tab, setTab] = useState("dashboard");
@@ -423,7 +279,6 @@ function App() {
       <div style={{ display:"flex", gap:4, padding:"10px 28px", borderBottom:"1px solid rgba(255,255,255,0.06)", background:"rgba(0,0,0,0.2)" }}>
         <Tab id="dashboard"   label="Dashboard"    emoji="📋"/>
         <Tab id="attendance"  label="Attendance"   emoji="✋"/>
-        <Tab id="learn"       label="Learn & News" emoji="📡"/>
         <Tab id="morale"      label="Morale Spin"  emoji="🎰"/>
         <Tab id="leaderboard" label="Leaderboard"  emoji="🏆"/>
       </div>
@@ -568,7 +423,6 @@ function App() {
       )}
 
       {/* LEARN */}
-      {tab==="learn" && <LearnTab/>}
 
       {/* MORALE */}
       {tab==="morale" && (
