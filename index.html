@@ -577,7 +577,7 @@ function App() {
       {/* LEADERBOARD */}
       {tab==="leaderboard" && (
         <div style={{ padding:32, maxWidth:700 }}>
-          <div style={{ fontSize:22, fontWeight:800, marginBottom:6 }}>🏆 Team Leaderboard</div>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}><div style={{ fontSize:22, fontWeight:800 }}>🏆 Team Leaderboard</div><button onClick={()=>{ if(window.confirm("Reset all points, streaks and attendance to zero?")){ const zero=Object.fromEntries(TEAM_MEMBERS.map(m=>[m,0])); setPoints(zero); setStreaks(zero); setAttendees({}); }}} style={{ background:"rgba(255,107,107,0.12)", border:"1px solid rgba(255,107,107,0.3)", color:"#FF6B6B", borderRadius:8, padding:"7px 16px", cursor:"pointer", fontSize:12, fontFamily:"inherit", fontWeight:600 }}>🔄 Reset All Scores</button></div>
           <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)", marginBottom:28 }}>check in (+{POINT_VALUES.checkIn}) · goal (+{POINT_VALUES.completeGoal}) · blocker (+{POINT_VALUES.resolveBlocker}) · quiz (+{POINT_VALUES.quizCorrect}) · spin (+{POINT_VALUES.spinWheel})</div>
           {lb.map(([name,pts],i)=>{ const pct=(pts/(lb[0][1]||1))*100; return (
             <div key={name} style={{ background:i===0?"rgba(255,230,109,0.06)":"rgba(255,255,255,0.03)", border:`1px solid ${i===0?"rgba(255,230,109,0.2)":"rgba(255,255,255,0.07)"}`, borderRadius:12, padding:"14px 18px", marginBottom:8, display:"flex", alignItems:"center", gap:14 }}>
