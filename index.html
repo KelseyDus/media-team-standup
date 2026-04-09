@@ -241,7 +241,8 @@ function LearnTab() {
       ? `You are a digital marketing expert. Topic: "${topic}". Brief educational summary for an agency standup. JSON only:\n{"title":"...","emoji":"...","summary":"3-4 sentences","key_points":["...","...","..."],"action_item":"1 concrete thing to do today","quiz_question":"...","quiz_options":["A. ...","B. ...","C. ...","D. ..."],"quiz_answer":"A"}`
       : PROMPTS[catId];
     try {
-      const res = await fetch("https://corsproxy.io/?url=https://api.anthropic.com/v1/messages", {
+      const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://api.anthropic.com/v1/messages");
+      const res = await fetch(proxyUrl, {
         method:"POST",
         headers:{
           "Content-Type":"application/json",
