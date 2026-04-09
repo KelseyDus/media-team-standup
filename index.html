@@ -33,14 +33,11 @@ const TEAM_MEMBERS = [
   "Lauren Raben",
 ];
 
-// Paste your Anthropic API key here for the Learn & News tab
-// Get it at: console.anthropic.com/settings/api-keys
-const ANTHROPIC_API_KEY = "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";
 
 // Paste your Monday.com API token here for live due dates
 // Get it at: monday.com → Avatar → Developers → API v2 Token
 // You can also enter it in the UI — click "Connect monday.com" top right
-const MONDAY_API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjYyMTkzNDY0NywiYWFpIjoxMSwidWlkIjo1NjY2Mjg2NiwiaWFkIjoiMjAyNi0wMi0xNlQxOToxNzoyNC4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MjYyNTk2NCwicmduIjoidXNlMSJ9.HODqf0i52h9g_spvWVqc7S4HhZjdXvb94VO7g5jMcDc";
+const MONDAY_API_KEY = "";
 
 const POINT_VALUES = {
   checkIn: 10,
@@ -223,6 +220,9 @@ function LearnTab() {
   const [quizResult, setQuizResult] = useState(null);
   const [custom, setCustom] = useState("");
   const [showCustom, setShowCustom] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const hasKey = !!localStorage.getItem("anthropic_key");
   const [saved, setSaved] = useLS("standup_saved_learn", []);
 
   const PROMPTS = {
@@ -234,8 +234,8 @@ function LearnTab() {
   };
 
   const fetchContent = async (catId, topic=null) => {
-    const key = ANTHROPIC_API_KEY;
-    if (!key) { setError("No Anthropic API key set. Add it to the CONFIG section at the top of index.html."); return; }
+    const key = localStorage.getItem("anthropic_key") || "";
+    if (!key) { setError("No Anthropic API key set. Click the ⚙ Settings button above to add your key."); return; }
     setLoading(true); setContent(null); setError(null); setQuizAnswer(null); setQuizResult(null);
     const prompt = topic
       ? `You are a digital marketing expert. Topic: "${topic}". Brief educational summary for an agency standup. JSON only:\n{"title":"...","emoji":"...","summary":"3-4 sentences","key_points":["...","...","..."],"action_item":"1 concrete thing to do today","quiz_question":"...","quiz_options":["A. ...","B. ...","C. ...","D. ..."],"quiz_answer":"A"}`
@@ -296,8 +296,21 @@ function LearnTab() {
   return (
     <div style={{ padding:28, display:"grid", gridTemplateColumns:"1fr 300px", gap:24, alignItems:"start" }}>
       <div>
-        <div style={{ fontSize:22, fontWeight:800, marginBottom:4 }}>📡 Learn & Stay Current</div>
-        <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)", marginBottom:20 }}>AI-powered digital marketing insights, refreshed on demand.</div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+          <div style={{ fontSize:22, fontWeight:800 }}>📡 Learn & Stay Current</div>
+          <button onClick={()=>{ setShowSettings(s=>!s); setApiKeyInput(localStorage.getItem("anthropic_key")||""); }} style={{ background:hasKey?"rgba(78,205,196,0.1)":"rgba(255,107,107,0.1)", border:`1px solid ${hasKey?"#4ECDC4":"#FF6B6B"}`, color:hasKey?"#4ECDC4":"#FF6B6B", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontSize:12, fontFamily:"inherit", fontWeight:600 }}>{hasKey?"⚙ API Key Set":"⚙ Add API Key"}</button>
+        </div>
+        <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)", marginBottom:showSettings?12:20 }}>AI-powered digital marketing insights, refreshed on demand.</div>
+        {showSettings && (
+          <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:12, padding:18, marginBottom:20 }}>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", marginBottom:10 }}>Paste your Anthropic API key below. It saves to this browser only — never touches GitHub.<br/><span style={{ color:"rgba(255,255,255,0.3)" }}>Get it at: console.anthropic.com/settings/api-keys</span></div>
+            <div style={{ display:"flex", gap:8 }}>
+              <input style={{ flex:1, background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:8, padding:"8px 12px", color:"#fff", fontSize:13, fontFamily:"inherit", outline:"none" }} type="password" placeholder="sk-ant-..." value={apiKeyInput} onChange={e=>setApiKeyInput(e.target.value)}/>
+              <button onClick={()=>{ if(apiKeyInput.trim()){ localStorage.setItem("anthropic_key", apiKeyInput.trim()); setShowSettings(false); setError(null); } }} style={{ background:"linear-gradient(135deg,#3f5efb,#fc466b)", border:"none", color:"#fff", borderRadius:8, padding:"8px 18px", cursor:"pointer", fontFamily:"inherit", fontWeight:700, fontSize:13 }}>Save</button>
+              {hasKey && <button onClick={()=>{ localStorage.removeItem("anthropic_key"); setApiKeyInput(""); setShowSettings(false); }} style={{ background:"rgba(255,107,107,0.15)", border:"1px solid rgba(255,107,107,0.3)", color:"#FF6B6B", borderRadius:8, padding:"8px 14px", cursor:"pointer", fontFamily:"inherit", fontSize:13 }}>Remove</button>}
+            </div>
+          </div>
+        )}
         <div style={{ display:"flex", gap:8, marginBottom:18, flexWrap:"wrap" }}>
           {LEARN_CATEGORIES.map(c=><button key={c.id} onClick={()=>{setCat(c);setContent(null);setError(null);setQuizAnswer(null);setQuizResult(null);}} style={{ background:cat.id===c.id?c.color+"22":"rgba(255,255,255,0.05)", border:`1px solid ${cat.id===c.id?c.color:"rgba(255,255,255,0.1)"}`, color:cat.id===c.id?c.color:"rgba(255,255,255,0.5)", borderRadius:24, padding:"7px 16px", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600 }}>{c.emoji} {c.label}</button>)}
         </div>
