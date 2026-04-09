@@ -432,11 +432,20 @@ function App() {
 
           {/* GOALS */}
           <div style={C.card}>
-            <div style={C.cardTitle}><span>🎯 Today's Goals</span><span style={C.pill("#A8E6CF")}>{goals.filter(g=>g.done).length}/{goals.length}</span></div>
+            <div style={C.cardTitle}>
+              <span>🎯 Today's Goals</span>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={C.pill("#A8E6CF")}>{goals.filter(g=>g.done).length}/{goals.length}</span>
+                {goals.some(g=>g.done) && <button onClick={()=>setGoals(prev=>prev.filter(g=>!g.done))} style={{ background:"rgba(255,107,107,0.15)", border:"1px solid rgba(255,107,107,0.3)", color:"#FF6B6B", borderRadius:6, padding:"2px 8px", cursor:"pointer", fontSize:11, fontFamily:"inherit", whiteSpace:"nowrap" }}>Clear Done</button>}
+                {goals.length > 0 && <button onClick={()=>setGoals([])} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"rgba(255,255,255,0.4)", borderRadius:6, padding:"2px 8px", cursor:"pointer", fontSize:11, fontFamily:"inherit", whiteSpace:"nowrap" }}>Clear All</button>}
+              </div>
+            </div>
+            {goals.length===0 && <div style={{ fontSize:13, color:"rgba(255,255,255,0.25)", textAlign:"center", padding:"20px 0" }}>No goals yet — add one below!</div>}
             {goals.map(g=>(
-              <div key={g.id} onClick={()=>setGoals(prev=>prev.map(x=>{ if(x.id!==g.id) return x; if(!x.done) award(x.owner,POINT_VALUES.completeGoal); return {...x,done:!x.done}; }))} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", cursor:"pointer", opacity:g.done?0.5:1 }}>
-                <div style={{ width:18, height:18, borderRadius:5, border:g.done?"none":"2px solid rgba(255,255,255,0.25)", background:g.done?"#4ECDC4":"transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:11, fontWeight:800 }}>{g.done?"✓":""}</div>
-                <div style={{ flex:1 }}><div style={{ fontSize:13, textDecoration:g.done?"line-through":"none" }}>{g.text}</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>→ {g.owner.split(" ")[0]}</div></div>
+              <div key={g.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", opacity:g.done?0.5:1 }}>
+                <div onClick={()=>setGoals(prev=>prev.map(x=>{ if(x.id!==g.id) return x; if(!x.done) award(x.owner,POINT_VALUES.completeGoal); return {...x,done:!x.done}; }))} style={{ width:18, height:18, borderRadius:5, border:g.done?"none":"2px solid rgba(255,255,255,0.25)", background:g.done?"#4ECDC4":"transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:11, fontWeight:800, cursor:"pointer" }}>{g.done?"✓":""}</div>
+                <div onClick={()=>setGoals(prev=>prev.map(x=>{ if(x.id!==g.id) return x; if(!x.done) award(x.owner,POINT_VALUES.completeGoal); return {...x,done:!x.done}; }))} style={{ flex:1, cursor:"pointer" }}><div style={{ fontSize:13, textDecoration:g.done?"line-through":"none" }}>{g.text}</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>→ {g.owner.split(" ")[0]}</div></div>
+                <button onClick={()=>setGoals(prev=>prev.filter(x=>x.id!==g.id))} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.2)", cursor:"pointer", fontSize:14, flexShrink:0 }}>×</button>
               </div>
             ))}
             {sag
