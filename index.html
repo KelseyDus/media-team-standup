@@ -35,10 +35,6 @@ const TEAM_MEMBERS = [
 
 
 // Paste your Monday.com API token here for live due dates
-// Get it at: monday.com → Avatar → Developers → API v2 Token
-// You can also enter it in the UI — click "Connect monday.com" top right
-const MONDAY_API_KEY = "";
-
 const POINT_VALUES = {
   checkIn: 10,
   completeGoal: 25,
@@ -90,14 +86,6 @@ const SEED = {
   ],
   streaks: { "Randy Capehart":7, "Tammy Shaw":12, "Tyler Shaw":3,  "Kelsey Dus":12, "Lauren Raben":12 },
   points:  { "Randy Capehart":175, "Tammy Shaw":340, "Tyler Shaw":120, "Kelsey Dus":380, "Lauren Raben":295 },
-  mondayItems: [
-    { id:"m1", name:"Jagoe Homes — Q2 Campaign Launch",  assignee:"Tyler",  dueDate:"2026-04-10", board:"Jagoe Homes" },
-    { id:"m2", name:"JE Shekell GTM Fix",                assignee:"Kelsey", dueDate:"2026-04-08", board:"JE Shekell" },
-    { id:"m3", name:"Be Happy Pie — KC Market Ads",      assignee:"Randy",  dueDate:"2026-04-14", board:"Be Happy Pie" },
-    { id:"m4", name:"Sun Behavioral Creative Brief",     assignee:"Lauren", dueDate:"2026-04-09", board:"Sun Behavioral" },
-    { id:"m5", name:"Way Construction Landing Page",     assignee:"Tammy",  dueDate:"2026-04-11", board:"The Way Construction" },
-    { id:"m6", name:"PromoIQ Dashboard Update",          assignee:"Kelsey", dueDate:"2026-04-15", board:"Internal" },
-  ],
 };
 // ─── END CONFIG ──────────────────────────────────────────────────────────────
 
@@ -205,12 +193,14 @@ function BlockerCard({ blocker, onResolve }) {
 function App() {
   const [tab, setTab] = useState("dashboard");
   const [time, setTime] = useState(new Date());
-  const [mondayToken, setMondayToken] = useLS("monday_token", MONDAY_API_KEY);
-  const [mondayItems, setMondayItems] = useLS("monday_items", []);
-  const [mondayConnected, setMondayConnected] = useLS("monday_connected", false);
-  const [mondayLoading, setMondayLoading] = useState(false);
-  const [mondayError, setMondayError] = useState(null);
-  const [showMondayModal, setShowMondayModal] = useState(false);
+  const [dueDates, setDueDates] = useLS("standup_duedates", [
+    { id:1, name:"Jagoe Homes — Q2 Campaign", assignee:"Tyler", dueDate:"2026-05-10" },
+    { id:2, name:"Be Happy Pie KC Ads", assignee:"Randy", dueDate:"2026-05-14" },
+  ]);
+  const [newDdName, setNewDdName] = useState("");
+  const [newDdAssignee, setNewDdAssignee] = useState(TEAM_MEMBERS[0]);
+  const [newDdDate, setNewDdDate] = useState(todayStr);
+  const [showAddDd, setShowAddDd] = useState(false);
   const [goals, setGoals] = useLS("standup_goals", SEED.goals);
   const [announcements, setAnn] = useLS("standup_ann", SEED.announcements);
   const [blockers, setBlockers] = useLS("standup_blockers", SEED.blockers);
@@ -229,59 +219,7 @@ function App() {
 
   const award = (name, amt) => setPoints(p=>({...p,[name]:(p[name]||0)+amt}));
 
-  const syncMonday = async token => {
-    if (!token) { setShowMondayModal(true); return; }
-    setMondayLoading(true); setMondayError(null);
-    try {
-      const q = `{ boards(limit:50) { name items_page(limit:100) { items { id name column_values { id text type value } } } } }`;
-      const res = await fetch("https://api.monday.com/v2", { method:"POST", headers:{"Content-Type":"application/json","Authorization":token}, body:JSON.stringify({query:q}) });
-      const data = await res.json();
-      if (data.errors) throw new Error(data.errors[0]?.message);
-      const boards = data?.data?.boards || [];
-      if (boards.length === 0) throw new Error("No boards found. Check your API token has the right permissions.");
-      const items = [];
-      boards.forEach(board=>{
-        (board?.items_page?.items||[]).forEach(item=>{
-          // Cast a wide net — grab any column that looks like a date
-          const dc = item.column_values?.find(c=>
-            c.type==="date" ||
-            c.type==="timeline" ||
-            c.id.toLowerCase().includes("date") ||
-            c.id.toLowerCase().includes("due") ||
-            c.id.toLowerCase().includes("deadline") ||
-            c.id.toLowerCase().includes("timeline")
-          );
-          const ac = item.column_values?.find(c=>
-            c.type==="people" ||
-            c.type==="person" ||
-            c.id.toLowerCase().includes("person") ||
-            c.id.toLowerCase().includes("assign") ||
-            c.id.toLowerCase().includes("owner")
-          );
-          // Try text first, then parse value for date type
-          let dueDate = dc?.text || "";
-          if (!dueDate && dc?.value) {
-            try { const v = JSON.parse(dc.value); dueDate = v.date || ""; } catch(e) {}
-          }
-          if (dueDate) {
-            items.push({ id:item.id, name:item.name, dueDate, assignee:ac?.text||"—", board:board.name });
-          }
-        });
-      });
-      if (items.length > 0) {
-        localStorage.removeItem("monday_items");
-        setMondayItems(items);
-        setMondayConnected(true);
-        setMondayError(null);
-      } else {
-        throw new Error(`Connected! Found ${boards.length} board(s) but no items with date columns. Make sure your boards have a Date column with values set.`);
-      }
-    } catch(e) { setMondayError(e.message); setMondayConnected(false); }
-    setMondayLoading(false);
-  };
-
   const uPto = pto.filter(p=>new Date(p.end)>=today).sort((a,b)=>new Date(a.start)-new Date(b.start));
-  const dueSoon = mondayItems.filter(i=>{ const d=daysUntil(i.dueDate); return d>=-1&&d<=7; }).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate));
   const todayAtt = attendees[todayStr]||[];
   const lb = Object.entries(points).sort((a,b)=>b[1]-a[1]);
   const rankEmoji = i => ["🥇","🥈","🥉"][i]||`#${i+1}`;
@@ -300,7 +238,6 @@ function App() {
         <div style={{ display:"flex", alignItems:"center", gap:20 }}>
           <div style={{ fontSize:14, fontWeight:700 }}>{today.toLocaleDateString("en-US",{weekday:"long"})}, {today.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
           <div style={{ fontSize:28, fontWeight:300, fontVariantNumeric:"tabular-nums", background:"rgba(255,255,255,0.05)", padding:"5px 16px", borderRadius:10, border:"1px solid rgba(255,255,255,0.1)" }}>{time.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</div>
-          <div onClick={()=>setShowMondayModal(true)} style={{ background:mondayConnected?"rgba(78,205,196,0.1)":"rgba(255,255,255,0.05)", border:`1px solid ${mondayConnected?"#4ECDC4":"rgba(255,255,255,0.1)"}`, borderRadius:8, padding:"6px 12px", cursor:"pointer", fontSize:12, color:mondayConnected?"#4ECDC4":"rgba(255,255,255,0.4)" }}>{mondayConnected?"✓ monday.com live":"⚙ Connect monday.com"}</div>
         </div>
       </div>
 
@@ -311,23 +248,7 @@ function App() {
         <Tab id="morale"      label="Morale Spin"  emoji="🎰"/>
         <Tab id="leaderboard" label="Leaderboard"  emoji="🏆"/>
       </div>
-
-      {/* MONDAY MODAL */}
-      {showMondayModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <div style={{ background:"#1a1a2e", border:"1px solid rgba(255,255,255,0.15)", borderRadius:16, padding:32, width:460, maxWidth:"90vw" }}>
-            <div style={{ fontSize:18, fontWeight:800, marginBottom:8 }}>Connect monday.com</div>
-            <div style={{ fontSize:13, color:"rgba(255,255,255,0.5)", marginBottom:6 }}>Paste your API token to pull live due dates.</div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)", marginBottom:20 }}>monday.com → Avatar → Developers → <span style={{ color:"#4ECDC4" }}>API v2 Token</span></div>
-            <input style={C.input} placeholder="eyJhbGciOiJIUzI1NiJ9..." value={mondayToken} onChange={e=>setMondayToken(e.target.value)}/>
-            {mondayError && <div style={{ marginTop:10, fontSize:12, color:"#FF6B6B" }}>⚠️ {mondayError}</div>}
-            <div style={{ display:"flex", gap:10, marginTop:16 }}>
-              <button onClick={()=>{ syncMonday(mondayToken); setShowMondayModal(false); }} style={C.saveBtn}>{mondayLoading?"Connecting...":"Connect & Sync"}</button>
-              <button onClick={()=>setShowMondayModal(false)} style={C.cancelBtn}>Cancel</button>
-            </div>
           </div>
-        </div>
-      )}
 
       {/* DASHBOARD */}
       {tab==="dashboard" && (
@@ -339,8 +260,8 @@ function App() {
               <span>🎯 Today's Goals</span>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={C.pill("#A8E6CF")}>{goals.filter(g=>g.done).length}/{goals.length}</span>
-                {goals.some(g=>g.done) && <button onClick={()=>setGoals(prev=>prev.filter(g=>!g.done))} style={{ background:"rgba(255,107,107,0.15)", border:"1px solid rgba(255,107,107,0.3)", color:"#FF6B6B", borderRadius:6, padding:"2px 8px", cursor:"pointer", fontSize:11, fontFamily:"inherit", whiteSpace:"nowrap" }}>Clear Done</button>}
-                {goals.length > 0 && <button onClick={()=>setGoals([])} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"rgba(255,255,255,0.4)", borderRadius:6, padding:"2px 8px", cursor:"pointer", fontSize:11, fontFamily:"inherit", whiteSpace:"nowrap" }}>Clear All</button>}
+                {goals.some(g=>g.done) && <button onClick={()=>setGoals(prev=>prev.filter(g=>!g.done))} style={{ background:"rgba(255,107,107,0.15)", border:"1px solid rgba(255,107,107,0.3)", color:"#FF6B6B", borderRadius:6, padding:"2px 8px", cursor:"pointer", fontSize:11, fontFamily:"inherit" }}>Clear Done</button>}
+                {goals.length > 0 && <button onClick={()=>setGoals([])} style={{ background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.15)", color:"rgba(255,255,255,0.4)", borderRadius:6, padding:"2px 8px", cursor:"pointer", fontSize:11, fontFamily:"inherit" }}>Clear All</button>}
               </div>
             </div>
             {goals.length===0 && <div style={{ fontSize:13, color:"rgba(255,255,255,0.25)", textAlign:"center", padding:"20px 0" }}>No goals yet — add one below!</div>}
@@ -381,7 +302,7 @@ function App() {
             <div style={C.cardTitle}><span>🚧 Blockers</span><span style={C.pill("#FF6B6B")}>{blockers.length} active</span></div>
             <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:12 }}>🟢 new · 🟡 2+ days · 🔴 5+ days</div>
             {blockers.length===0&&<div style={{ textAlign:"center", padding:32, color:"rgba(255,255,255,0.2)", fontSize:13 }}>🎉 No blockers!</div>}
-            {blockers.map(b=><BlockerCard key={b.id} blocker={b} onResolve={id=>{ const b=blockers.find(x=>x.id===id); if(b) award(b.owner,POINT_VALUES.resolveBlocker); setBlockers(p=>p.filter(x=>x.id!==id)); }}/>)}
+            {blockers.map(b=><BlockerCard key={b.id} blocker={b} onResolve={id=>{ const bl=blockers.find(x=>x.id===id); if(bl) award(bl.owner,POINT_VALUES.resolveBlocker); setBlockers(p=>p.filter(x=>x.id!==id)); }}/>)}
             {sab
               ? <AddForm onSave={()=>{ if(!nbt.trim()) return; setBlockers(p=>[...p,{id:Date.now(),text:nbt,owner:nbo,project:nbp,createdAt:new Date().toISOString()}]); setNbt(""); setNbp(""); setSab(false); }} onCancel={()=>setSab(false)}>
                   <input style={{...C.input,marginBottom:8}} placeholder="Describe the blocker..." value={nbt} onChange={e=>setNbt(e.target.value)}/>
@@ -412,21 +333,33 @@ function App() {
               : <button style={C.addBtn} onClick={()=>setSap(true)}>+ Add PTO</button>}
           </div>
 
-          {/* MONDAY DUE DATES */}
+          {/* DUE DATES */}
           <div style={C.card}>
-            <div style={C.cardTitle}><span>📅 Due Soon — monday.com</span><button onClick={()=>syncMonday(mondayToken)} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.3)", cursor:"pointer", fontSize:16 }}>{mondayLoading?"⏳":"↻"}</button></div>
-            {mondayError&&<div style={{ background:"rgba(255,107,107,0.1)", border:"1px solid rgba(255,107,107,0.3)", borderRadius:8, padding:10, marginBottom:12, fontSize:12, color:"#FF6B6B" }}>⚠️ {mondayError}</div>}
-            {!mondayConnected&&!mondayError&&<div style={{ background:"rgba(63,94,251,0.08)", border:"1px solid rgba(63,94,251,0.25)", borderRadius:8, padding:10, marginBottom:12, fontSize:12, color:"rgba(255,255,255,0.45)" }}>⚡ Not connected. <span style={{ color:"#4ECDC4", cursor:"pointer" }} onClick={()=>setShowMondayModal(true)}>Connect monday.com</span> to see live due dates.</div>}
-            {mondayConnected&&dueSoon.length===0&&<div style={{ textAlign:"center", padding:24, color:"rgba(255,255,255,0.25)", fontSize:13 }}>Nothing due in the next 7 days 🎉</div>}
-            {!mondayConnected&&!mondayError&&<div style={{ textAlign:"center", padding:24, color:"rgba(255,255,255,0.25)", fontSize:13 }}>Connect monday.com above to see due dates.</div>}
-            {dueSoon.map(item=>{ const d=daysUntil(item.dueDate); const col=d<0?"#FF6B6B":d===0?"#FF6B6B":d<=2?"#FFE66D":"#4ECDC4"; return (
+            <div style={C.cardTitle}><span>📅 Due Dates</span><span style={C.pill("#4ECDC4")}>{dueDates.length}</span></div>
+            {dueDates.length===0&&<div style={{ textAlign:"center", padding:24, color:"rgba(255,255,255,0.25)", fontSize:13 }}>No due dates — add one below!</div>}
+            {dueDates.sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).map(item=>{ const d=daysUntil(item.dueDate); const col=d<0?"#FF6B6B":d===0?"#FF6B6B":d<=2?"#FFE66D":"#4ECDC4"; return (
               <div key={item.id} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", alignItems:"center" }}>
                 <div style={{ width:4, borderRadius:4, alignSelf:"stretch", background:col, flexShrink:0, minHeight:30 }}/>
-                <div style={{ flex:1, minWidth:0 }}><div style={{ fontSize:13, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.name}</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>{item.board} · {item.assignee}</div></div>
-                <div style={{ textAlign:"right", flexShrink:0 }}><div style={{ fontSize:12, color:col, fontWeight:700 }}>{d<0?`${Math.abs(d)}d over`:d===0?"TODAY":`${d}d`}</div><div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>{fmt(item.dueDate)}</div></div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.name}</div>
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>→ {item.assignee.split(" ")[0]}</div>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0, marginRight:8 }}>
+                  <div style={{ fontSize:12, color:col, fontWeight:700 }}>{d<0?`${Math.abs(d)}d over`:d===0?"TODAY":`in ${d}d`}</div>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>{fmt(item.dueDate)}</div>
+                </div>
+                <button onClick={()=>setDueDates(prev=>prev.filter(x=>x.id!==item.id))} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.2)", cursor:"pointer", fontSize:14, flexShrink:0 }}>×</button>
               </div>
             ); })}
+            {showAddDd
+              ? <AddForm onSave={()=>{ if(!newDdName.trim()) return; setDueDates(p=>[...p,{id:Date.now(),name:newDdName,assignee:newDdAssignee,dueDate:newDdDate}]); setNewDdName(""); setShowAddDd(false); }} onCancel={()=>setShowAddDd(false)}>
+                  <input style={{...C.input,marginBottom:8}} placeholder="Task or project name..." value={newDdName} onChange={e=>setNewDdName(e.target.value)}/>
+                  <select style={{...C.select,marginBottom:8}} value={newDdAssignee} onChange={e=>setNewDdAssignee(e.target.value)}>{TEAM_MEMBERS.map(m=><option key={m}>{m}</option>)}</select>
+                  <input type="date" style={C.input} value={newDdDate} onChange={e=>setNewDdDate(e.target.value)}/>
+                </AddForm>
+              : <button style={C.addBtn} onClick={()=>setShowAddDd(true)}>+ Add Due Date</button>}
           </div>
+
         </div>
       )}
 
