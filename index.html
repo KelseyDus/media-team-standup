@@ -233,24 +233,50 @@ function App() {
     if (!token) { setShowMondayModal(true); return; }
     setMondayLoading(true); setMondayError(null);
     try {
-      const q = `{ boards(limit:50) { name items_page(limit:100) { items { id name column_values { id text type } } } } }`;
+      const q = `{ boards(limit:50) { name items_page(limit:100) { items { id name column_values { id text type value } } } } }`;
       const res = await fetch("https://api.monday.com/v2", { method:"POST", headers:{"Content-Type":"application/json","Authorization":token}, body:JSON.stringify({query:q}) });
       const data = await res.json();
       if (data.errors) throw new Error(data.errors[0]?.message);
+      const boards = data?.data?.boards || [];
+      if (boards.length === 0) throw new Error("No boards found. Check your API token has the right permissions.");
       const items = [];
-      (data?.data?.boards||[]).forEach(board=>{
+      boards.forEach(board=>{
         (board?.items_page?.items||[]).forEach(item=>{
-          const dc = item.column_values?.find(c=>c.type==="date"||c.id.includes("date")||c.id.includes("due"));
-          const ac = item.column_values?.find(c=>c.type==="people"||c.id.includes("person")||c.id.includes("assign"));
-          if (dc?.text) items.push({ id:item.id, name:item.name, dueDate:dc.text, assignee:ac?.text||"—", board:board.name });
+          // Cast a wide net — grab any column that looks like a date
+          const dc = item.column_values?.find(c=>
+            c.type==="date" ||
+            c.type==="timeline" ||
+            c.id.toLowerCase().includes("date") ||
+            c.id.toLowerCase().includes("due") ||
+            c.id.toLowerCase().includes("deadline") ||
+            c.id.toLowerCase().includes("timeline")
+          );
+          const ac = item.column_values?.find(c=>
+            c.type==="people" ||
+            c.type==="person" ||
+            c.id.toLowerCase().includes("person") ||
+            c.id.toLowerCase().includes("assign") ||
+            c.id.toLowerCase().includes("owner")
+          );
+          // Try text first, then parse value for date type
+          let dueDate = dc?.text || "";
+          if (!dueDate && dc?.value) {
+            try { const v = JSON.parse(dc.value); dueDate = v.date || ""; } catch(e) {}
+          }
+          if (dueDate) {
+            items.push({ id:item.id, name:item.name, dueDate, assignee:ac?.text||"—", board:board.name });
+          }
         });
       });
-      if (items.length > 0) { 
+      if (items.length > 0) {
         localStorage.removeItem("monday_items");
-        setMondayItems(items); 
-        setMondayConnected(true); 
-      } else throw new Error("No items with due dates found. Check your board column names.");
-    } catch(e) { setMondayError(e.message); }
+        setMondayItems(items);
+        setMondayConnected(true);
+        setMondayError(null);
+      } else {
+        throw new Error(`Connected! Found ${boards.length} board(s) but no items with date columns. Make sure your boards have a Date column with values set.`);
+      }
+    } catch(e) { setMondayError(e.message); setMondayConnected(false); }
     setMondayLoading(false);
   };
 
@@ -389,9 +415,10 @@ function App() {
           {/* MONDAY DUE DATES */}
           <div style={C.card}>
             <div style={C.cardTitle}><span>📅 Due Soon — monday.com</span><button onClick={()=>syncMonday(mondayToken)} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.3)", cursor:"pointer", fontSize:16 }}>{mondayLoading?"⏳":"↻"}</button></div>
-            {!mondayConnected&&<div style={{ background:"rgba(63,94,251,0.08)", border:"1px solid rgba(63,94,251,0.25)", borderRadius:8, padding:10, marginBottom:12, fontSize:12, color:"rgba(255,255,255,0.45)" }}>⚡ Not connected. <span style={{ color:"#4ECDC4", cursor:"pointer" }} onClick={()=>setShowMondayModal(true)}>Connect monday.com</span> to see live due dates.</div>}
+            {mondayError&&<div style={{ background:"rgba(255,107,107,0.1)", border:"1px solid rgba(255,107,107,0.3)", borderRadius:8, padding:10, marginBottom:12, fontSize:12, color:"#FF6B6B" }}>⚠️ {mondayError}</div>}
+            {!mondayConnected&&!mondayError&&<div style={{ background:"rgba(63,94,251,0.08)", border:"1px solid rgba(63,94,251,0.25)", borderRadius:8, padding:10, marginBottom:12, fontSize:12, color:"rgba(255,255,255,0.45)" }}>⚡ Not connected. <span style={{ color:"#4ECDC4", cursor:"pointer" }} onClick={()=>setShowMondayModal(true)}>Connect monday.com</span> to see live due dates.</div>}
             {mondayConnected&&dueSoon.length===0&&<div style={{ textAlign:"center", padding:24, color:"rgba(255,255,255,0.25)", fontSize:13 }}>Nothing due in the next 7 days 🎉</div>}
-            {!mondayConnected&&<div style={{ textAlign:"center", padding:24, color:"rgba(255,255,255,0.25)", fontSize:13 }}>Connect monday.com above to see due dates.</div>}
+            {!mondayConnected&&!mondayError&&<div style={{ textAlign:"center", padding:24, color:"rgba(255,255,255,0.25)", fontSize:13 }}>Connect monday.com above to see due dates.</div>}
             {dueSoon.map(item=>{ const d=daysUntil(item.dueDate); const col=d<0?"#FF6B6B":d===0?"#FF6B6B":d<=2?"#FFE66D":"#4ECDC4"; return (
               <div key={item.id} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", alignItems:"center" }}>
                 <div style={{ width:4, borderRadius:4, alignSelf:"stretch", background:col, flexShrink:0, minHeight:30 }}/>
